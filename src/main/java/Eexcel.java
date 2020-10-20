@@ -2,10 +2,12 @@ import org.apache.poi.hssf.usermodel.HSSFWorkbook;
 import org.apache.poi.ss.usermodel.*;
 import org.apache.poi.ss.util.CellRangeAddress;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
-
+import org.springframework.http.MediaType;
+import javax.servlet.http.HttpServletResponse;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.net.URLEncoder;
 
 
 public class Eexcel {
@@ -131,6 +133,17 @@ public class Eexcel {
         }
         return true;
     }
+    
+    public void writeResponse(String fileName, HttpServletResponse response){
+        try {
+            response.setContentType(MediaType.APPLICATION_OCTET_STREAM_VALUE);
+            response.setHeader("Content-Disposition", "attachment;filename="+ URLEncoder.encode(fileName, "utf-8"));
+            response.flushBuffer();
+            workbook.write(response.getOutputStream());
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
 
     public Eexcel() {
         workbook = new HSSFWorkbook();//创建excel文件
@@ -143,6 +156,7 @@ public class Eexcel {
         } else {
             workbook = new HSSFWorkbook();//创建excel文件
         }
+        init();
     }
 
     public void init() {
