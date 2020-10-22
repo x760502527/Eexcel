@@ -1,14 +1,22 @@
+
+import org.apache.commons.lang3.time.DateFormatUtils;
+import org.apache.poi.hssf.usermodel.HSSFDateUtil;
 import org.apache.poi.hssf.usermodel.HSSFWorkbook;
 import org.apache.poi.ss.usermodel.*;
 import org.apache.poi.ss.util.CellRangeAddress;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.springframework.http.MediaType;
+import org.springframework.web.multipart.MultipartFile;
+
 import javax.servlet.http.HttpServletResponse;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.net.URLEncoder;
-
+import java.text.NumberFormat;
+import java.util.ArrayList;
+import java.util.List;
 
 public class Eexcel {
     private Workbook workbook;
@@ -133,15 +141,37 @@ public class Eexcel {
         }
         return true;
     }
-    
-    public void writeResponse(String fileName, HttpServletResponse response){
+
+    public void writeResponse(String fileName, HttpServletResponse response) {
         try {
             response.setContentType(MediaType.APPLICATION_OCTET_STREAM_VALUE);
-            response.setHeader("Content-Disposition", "attachment;filename="+ URLEncoder.encode(fileName, "utf-8"));
+            response.setHeader("Content-Disposition", "attachment;filename=" + URLEncoder.encode(fileName, "utf-8"));
             response.flushBuffer();
             workbook.write(response.getOutputStream());
         } catch (IOException e) {
             e.printStackTrace();
+        }
+    }
+
+    public void close() {
+        if (workbook != null) {
+            try {
+                workbook.close();
+            } catch (Exception e) {
+                throw new RuntimeException("关闭excel连接失败");
+            }
+        }
+    }
+
+    public Eexcel(MultipartFile file) {
+        String fileName = file.getOriginalFilename();
+
+        if (fileName.matches("^.+\\.(?i)(xls)$")) {
+            workbook = new HSSFWorkbook();//创建excel文件
+        } else if (fileName.matches("^.+\\.(?i)(xlsx)$")) {
+            workbook = new XSSFWorkbook();//创建excel文件
+        } else {
+            throw new RuntimeException("Eexcel格式不正确");
         }
     }
 
@@ -254,9 +284,9 @@ public class Eexcel {
 
     public Eexcel setCellStyle(CellStyle style) {
         int num = isMergedRegion(sheet, ccol, crow);
-        if(num!=-1){
-            MergedRegionStyle(num,style);
-        }else{
+        if (num != -1) {
+            MergedRegionStyle(num, style);
+        } else {
             cell.setCellStyle(style);
         }
         return this;
@@ -264,9 +294,9 @@ public class Eexcel {
 
     public Eexcel setCellStyle(CellStyle style, int col) {
         int num = isMergedRegion(sheet, col, crow);
-        if(num!=-1){
-            MergedRegionStyle(num,style);
-        }else{
+        if (num != -1) {
+            MergedRegionStyle(num, style);
+        } else {
             Cell cell = row.getCell(col);
             if (cell == null) {
                 cell = row.createCell(col);
@@ -278,9 +308,9 @@ public class Eexcel {
 
     public Eexcel setCellStyle(CellStyle style, int col, int row) {
         int num = isMergedRegion(sheet, col, row);
-        if(num!=-1){
-            MergedRegionStyle(num,style);
-        }else{
+        if (num != -1) {
+            MergedRegionStyle(num, style);
+        } else {
             Row row1 = sheet.getRow(row);
             if (row1 == null) {
                 row1 = sheet.createRow(row);
@@ -293,20 +323,21 @@ public class Eexcel {
         }
         return this;
     }
+
     /**
-     * @Date 2017/12/6 15:52
-     * @Author dxcr
-     * @Description 范围设置单元格样式
      * @param style 样式
      * @param cols  开始行
      * @param cole  结束行
      * @param rows  开始列
      * @param rowe  结束列
      * @return
+     * @Date 2017/12/6 15:52
+     * @Author dxcr
+     * @Description 范围设置单元格样式
      */
-    public void setRegionStyle(CellStyle style, int cols, int cole,int rows,int rowe){
-        for (int i=rows;i<=rowe;i++){
-            for (int j=cols;j<=cole;j++){
+    public void setRegionStyle(CellStyle style, int cols, int cole, int rows, int rowe) {
+        for (int i = rows; i <= rowe; i++) {
+            for (int j = cols; j <= cole; j++) {
                 Row row1 = sheet.getRow(i);
                 if (row1 == null) {
                     row1 = sheet.createRow(i);
@@ -319,6 +350,7 @@ public class Eexcel {
             }
         }
     }
+
     /**
      * @param value 单元格值
      * @param scol  合并列数
@@ -473,6 +505,98 @@ public class Eexcel {
         return this;
     }
 
+    /**
+     * @return java.lang.String
+     * @Param
+     * @Date 2020/10/21
+     * @Author dxcr
+     * @Description
+     */
+    public String read() {
+        Cell mcell = row.getCell(ccol);
+        String value = getCellValue(mcell);
+        step();
+        return value;
+    }
+
+    /**
+    * @Param file
+    * @return java.util.List
+    * @Date 2020/10/21
+    * @Author dxcr
+    * @Description  读取execl转为list
+    */
+    public static List<List<String>> readToList(MultipartFile file) {
+        List<List<String>> dataList = new ArrayList<>();
+
+        String fileName = file.getOriginalFilename();
+        if (!fileName.matches("^.+\\.(?i)(xls)$") && !fileName.matches("^.+\\.(?i)(xlsx)$")) {
+            return dataList;
+        }
+        Workbook workbook = null;
+        try {
+            InputStream is = file.getInputStream();
+            if (fileName.endsWith("xlsx")) {
+//                FileInputStream is = new FileInputStream(new File(path));
+                workbook = new XSSFWorkbook(is);
+            }
+            if (fileName.endsWith("xls")) {
+//                FileInputStream is = new FileInputStream(new File(path));
+                workbook = new HSSFWorkbook(is);
+            }
+            if (workbook != null) {
+
+                //默认读取第一个sheet
+                Sheet sheet = workbook.getSheetAt(0);
+
+                boolean firstRow = true;
+                for (int i = sheet.getFirstRowNum(); i <= sheet.getLastRowNum(); i++) {
+                    Row row = sheet.getRow(i);
+                    //首行  提取注解
+                    if (firstRow) {
+                        List list = new ArrayList();
+                        for (int j = row.getFirstCellNum(); j <= row.getLastCellNum(); j++) {
+                            Cell cell = row.getCell(j);
+                            String cellValue = getCellValue(cell);
+                            list.add(cellValue);
+                        }
+                        dataList.add(list);
+                        firstRow = false;
+                    } else {
+                        //忽略空白行
+                        if (row == null) {
+                            continue;
+                        }
+                        List list = new ArrayList();
+                        //判断是否为空白行
+                        boolean allBlank = true;
+                        for (int j = row.getFirstCellNum(); j <= row.getLastCellNum(); j++) {
+                            Cell cell = row.getCell(j);
+                            String cellValue = getCellValue(cell);
+                            list.add(cellValue);
+                        }
+                        dataList.add(list);
+                    }
+                }
+            }
+        } catch (Exception e) {
+        } finally {
+            if (workbook != null) {
+                try {
+                    workbook.close();
+                } catch (Exception e) {
+                }
+            }
+        }
+        return dataList;
+    }
+
+    public Eexcel step() {
+        ccol += 1;
+        cell = row.getCell(ccol);
+        return this;
+    }
+
     public Eexcel next() {
         crow++;
         ccol = 0;
@@ -481,6 +605,30 @@ public class Eexcel {
             row = sheet.createRow(crow);
         }
         return this;
+    }
+
+    private static String getCellValue(Cell cell) {
+        String cellValue = "";
+        if (cell == null) {
+            return "";
+        }
+        if (cell.getCellTypeEnum() == CellType.NUMERIC) {
+            if (HSSFDateUtil.isCellDateFormatted(cell)) {
+                cellValue = DateFormatUtils.format(cell.getDateCellValue(), "yyyy-MM-dd");
+            } else {
+                NumberFormat nf = NumberFormat.getInstance();
+                cellValue = String.valueOf(nf.format(cell.getNumericCellValue())).replace(",", "");
+            }
+        } else if (cell.getCellTypeEnum() == CellType.STRING) {
+            cellValue = String.valueOf(cell.getStringCellValue());
+        } else if (cell.getCellTypeEnum() == CellType.BOOLEAN) {
+            cellValue = String.valueOf(cell.getBooleanCellValue());
+        } else if (cell.getCellTypeEnum() == CellType.ERROR) {
+            cellValue = "error";
+        } else {
+            cellValue = "";
+        }
+        return cellValue;
     }
 
     /**
@@ -509,21 +657,21 @@ public class Eexcel {
         return -1;
     }
 
-    private void MergedRegionStyle(int num,CellStyle style) {
+    private void MergedRegionStyle(int num, CellStyle style) {
         CellRangeAddress ca = sheet.getMergedRegion(num);
         int firstColumn = ca.getFirstColumn();
         int lastColumn = ca.getLastColumn();
         int firstRow = ca.getFirstRow();
         int lastRow = ca.getLastRow();
-        for (int i=firstRow;i<=lastRow;i++){
-            for (int j=firstColumn;j<=lastColumn;j++){
-                Row r=sheet.getRow(i);
-                if(r==null){
-                    r=sheet.createRow(i);
+        for (int i = firstRow; i <= lastRow; i++) {
+            for (int j = firstColumn; j <= lastColumn; j++) {
+                Row r = sheet.getRow(i);
+                if (r == null) {
+                    r = sheet.createRow(i);
                 }
-                Cell c=r.getCell(j);
-                if(c==null){
-                    c=r.createCell(j);
+                Cell c = r.getCell(j);
+                if (c == null) {
+                    c = r.createCell(j);
                 }
                 c.setCellStyle(style);
             }
