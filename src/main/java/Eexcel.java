@@ -4,6 +4,8 @@ import org.apache.poi.hssf.usermodel.HSSFDateUtil;
 import org.apache.poi.hssf.usermodel.HSSFWorkbook;
 import org.apache.poi.ss.usermodel.*;
 import org.apache.poi.ss.util.CellRangeAddress;
+import org.apache.poi.ss.util.CellRangeAddressList;
+import org.apache.poi.xssf.usermodel.XSSFDataValidation;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.springframework.http.MediaType;
 import org.springframework.web.multipart.MultipartFile;
@@ -75,11 +77,23 @@ public class Eexcel {
      * @return
      * @Date 2017/12/6 13:53
      * @Author dxcr
-     * @Description 获得样式
+     * @Description 创建样式
      */
-    public CellStyle getCellStyle() {
+    public CellStyle createCellStyle() {
         CellStyle style = workbook.createCellStyle();
         return style;
+    }
+
+    /**
+     * @param
+     * @return
+     * @Date 2017/12/6 13:53
+     * @Author dxcr
+     * @Description 创建字体
+     */
+    public Font createFont() {
+        Font font = workbook.createFont();
+        return font;
     }
 
     /**
@@ -607,6 +621,49 @@ public class Eexcel {
         return this;
     }
 
+    /**
+    * @Param values 下拉框选项值
+    * @Param firstRow 起始行
+    * @Param lastRow 终止行
+    * @Param firstCol  起始列
+    * @Param lastCol   终止列
+    * @return com.hag.datacenter.utils.Eexcel
+    * @Date 2020/10/26
+    * @Author dxcr
+    * @Description 创建下拉列表选项
+    */
+    public Eexcel createDropDownList(String[] values, int firstRow, int lastRow, int firstCol, int lastCol) {
+        DataValidationHelper helper = sheet.getDataValidationHelper();
+
+        CellRangeAddressList addressList = new CellRangeAddressList(firstRow, lastRow, firstCol, lastCol);
+        // 设置下拉框数据
+        DataValidationConstraint constraint = helper.createExplicitListConstraint(values);
+        DataValidation dataValidation = helper.createValidation(constraint, addressList);
+
+        // Excel兼容性问题
+        if (dataValidation instanceof XSSFDataValidation) {
+            dataValidation.setSuppressDropDownArrow(true);
+            dataValidation.setShowErrorBox(true);
+        } else {
+            dataValidation.setSuppressDropDownArrow(false);
+        }
+
+        sheet.addValidationData(dataValidation);
+
+        return this;
+    }
+
+    /**
+    * @Param values 下拉框选项值
+    * @return com.hag.datacenter.utils.Eexcel
+    * @Date 2020/10/26
+    * @Author dxcr
+    * @Description  当前单元格添加下拉框
+    */
+    public Eexcel dropDownList(String[] values) {
+        return createDropDownList(values,this.crow, this.crow, this.ccol-1, this.ccol-1);
+    }
+
     private static String getCellValue(Cell cell) {
         String cellValue = "";
         if (cell == null) {
@@ -614,7 +671,7 @@ public class Eexcel {
         }
         if (cell.getCellTypeEnum() == CellType.NUMERIC) {
             if (HSSFDateUtil.isCellDateFormatted(cell)) {
-                cellValue = DateFormatUtils.format(cell.getDateCellValue(), "yyyy-MM-dd");
+                cellValue = DateFormatUtils.format(cell.getDateCellValue(), "yyyy-MM-dd HH:mm:ss");
             } else {
                 NumberFormat nf = NumberFormat.getInstance();
                 cellValue = String.valueOf(nf.format(cell.getNumericCellValue())).replace(",", "");
